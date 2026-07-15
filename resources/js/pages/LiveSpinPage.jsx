@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Wheel } from 'react-custom-roulette';
 import axios from 'axios';
-import { Trophy, Loader2, Upload, Sparkles } from 'lucide-react';
+import { Trophy, Loader2, Upload, Sparkles, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const platformThemes = {
@@ -56,9 +56,13 @@ export default function LiveSpinPage({ platform, event }) {
 
   // Fake Upload state
   const [isUploading, setIsUploading] = useState(false);
-  const handleFakeUpload = () => {
+  const [fakeFileName, setFakeFileName] = useState('');
+  const handleFakeUpload = (filename) => {
     setIsUploading(true);
-    setTimeout(() => setIsUploading(false), 1500);
+    setTimeout(() => {
+      setIsUploading(false);
+      setFakeFileName(filename);
+    }, 1500);
   };
 
   useEffect(() => {
@@ -124,12 +128,12 @@ export default function LiveSpinPage({ platform, event }) {
       if (overridePrizeId) payload.prize_id = overridePrizeId;
 
       const res = await axios.post(`/api/live/${platform}/${event.slug}/spin`, payload);
-      const { receipt_number, prize, wheel_items, winner_index, remaining: rem } = res.data;
+      const { receipt_number, prize, wheel_items, winner_index, remaining: rem, history_id } = res.data;
 
       const newWheelData = wheel_items.map(item => ({ option: item }));
       setWheelData(newWheelData);
       setPrizeNumber(winner_index);
-      setWinnerName({ receipt: receipt_number, prize });
+      setWinnerName({ receipt: receipt_number, prize, history_id });
       setRemaining(rem);
 
       setTimeout(() => {
@@ -150,8 +154,21 @@ export default function LiveSpinPage({ platform, event }) {
 
   const nextStep = () => {
     setShowWinner(false);
-    setWinnersHistory(prev => [...prev, { receipt: winnerName.receipt, prize: winnerName.prize, step: prev.length + 1 }]);
+    setWinnersHistory(prev => [...prev, { receipt: winnerName.receipt, prize: winnerName.prize, history_id: winnerName.history_id, step: prev.length + 1 }]);
     fetchEvents(); // Re-fetch to get updated pending slots
+  };
+
+  const handleDeleteWinner = async (history_id, idx) => {
+    if (!window.confirm('Yakin ingin membatalkan/menghapus pemenang ini? Slot event akan dikembalikan menjadi pending dan peserta akan dikembalikan ke daftar acak.')) return;
+    try {
+      await axios.delete(`/histories/${history_id}`);
+      setWinnersHistory(prev => prev.filter((_, i) => i !== idx));
+      fetchEvents(); // Refresh pending slots
+      alert('Pemenang berhasil dihapus dan slot event telah dikembalikan.');
+    } catch (err) {
+      alert('Gagal menghapus pemenang.');
+      console.error(err);
+    }
   };
 
   return (
@@ -262,7 +279,7 @@ export default function LiveSpinPage({ platform, event }) {
               accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
               onChange={(e) => {
                 if(e.target.files && e.target.files.length > 0) {
-                  handleFakeUpload();
+                  handleFakeUpload(e.target.files[0].name);
                   e.target.value = null; // Reset input
                 }
               }} 
@@ -275,6 +292,11 @@ export default function LiveSpinPage({ platform, event }) {
               {isUploading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
               {isUploading ? 'Mengunggah...' : 'Upload Excel'}
             </label>
+            {fakeFileName && (
+              <div className="text-xs font-bold text-emerald-600 bg-emerald-100 px-3 py-1.5 rounded-lg flex items-center mt-2 shadow-sm truncate max-w-full" title={fakeFileName}>
+                File: {fakeFileName}
+              </div>
+            )}
           </div>
 
           <div className="w-full bg-white/80 backdrop-blur-md rounded-3xl border border-gray-300 shadow-2xl p-6 flex flex-col h-[650px]">
@@ -295,7 +317,12 @@ export default function LiveSpinPage({ platform, event }) {
                     <span className={`absolute -top-3 -left-3 ${theme.accentBg} text-white text-xs font-black px-3 py-1 rounded-full shadow-lg border-2 border-gray-900`}>
                       #{w.step}
                     </span>
-                    <div className="font-mono text-2xl font-bold text-gray-800 mt-1">{w.receipt}</div>
+                    <div className="flex justify-between items-start mt-1">
+                      <div className="font-mono text-2xl font-bold text-gray-800">{w.receipt}</div>
+                      <button onClick={() => handleDeleteWinner(w.history_id, i)} className="text-gray-400 hover:text-rose-500 transition-colors p-1.5" title="Batalkan Pemenang (Hapus)">
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
                     <div className={`${theme.accent} font-medium text-sm mt-2 flex items-center`}>
                       <div className={`w-2 h-2 rounded-full ${theme.accentBg} mr-2`}></div>
                       {w.prize}

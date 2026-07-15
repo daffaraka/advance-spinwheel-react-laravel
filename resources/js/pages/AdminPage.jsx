@@ -141,6 +141,9 @@ export default function AdminPage() {
           {uploadResult && (
             <div className="mt-4 p-4 bg-emerald-900/30 border border-emerald-800 rounded-xl text-sm">
               <p className="text-emerald-400 font-bold mb-2">✓ Import Berhasil!</p>
+              {uploadResult.filename && (
+                <p className="text-emerald-300 font-medium mb-2 truncate">File: {uploadResult.filename}</p>
+              )}
               <div className="flex gap-6 text-gray-300">
                 <span>TikTok: <strong className="text-indigo-400">{uploadResult.tiktok}</strong> resi</span>
                 <span>Shopee: <strong className="text-indigo-400">{uploadResult.shopee}</strong> resi</span>

@@ -15,6 +15,7 @@ export default function QuickSpinPage({ auth }) {
 
   // Upload
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState('');
 
   // Stats
   const [totalParticipants, setTotalParticipants] = useState(0);
@@ -72,10 +73,11 @@ export default function QuickSpinPage({ auth }) {
 
       setIsUploading(true);
       try {
-        await axios.post('/upload-combined', formData, {
+        const res = await axios.post('/upload-combined', formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
         alert('Upload berhasil!');
+        if (res.data.filename) setUploadedFileName(res.data.filename);
         setWinnersHistory([]);
         setCurrentEventId(null);
         fetchInit();
@@ -223,6 +225,11 @@ export default function QuickSpinPage({ auth }) {
                   {isUploading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
                   {isUploading ? 'Mengunggah...' : 'Upload Excel'}
                 </button>
+                {uploadedFileName && (
+                  <div className="text-xs font-bold text-emerald-600 bg-emerald-100 px-3 py-1.5 rounded-lg flex items-center mt-2 shadow-sm truncate max-w-full" title={uploadedFileName}>
+                    File: {uploadedFileName}
+                  </div>
+                )}
               </div>
               {/* Prize */}
               <div className="flex-1 w-full xl:w-auto">

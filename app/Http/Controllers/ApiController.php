@@ -43,13 +43,21 @@ class ApiController extends Controller
             'file' => 'required|mimes:xlsx,csv,xls',
         ]);
 
-        // Truncate old data for both platforms
-        Participant::where('platform', 'tiktok')->delete();
-        Participant::where('platform', 'shopee')->delete();
+        if ($request->input('clear_old') === 'yes') {
+            // Truncate old data for both platforms
+            Participant::where('platform', 'tiktok')->delete();
+            Participant::where('platform', 'shopee')->delete();
+        }
+
+        $file = $request->file('file');
+        
+        // Save the file locally
+        $filename = time() . '_' . $file->getClientOriginalName();
+        $file->storeAs('uploads', $filename, 'local');
 
         // Import with combined importer
         $import = new ParticipantsCombinedImport();
-        Excel::import($import, $request->file('file'));
+        Excel::import($import, $file);
 
         $counts = $import->getCounts();
         $tiktokCount = Participant::where('platform', 'tiktok')->count();
@@ -57,6 +65,7 @@ class ApiController extends Controller
 
         return response()->json([
             'message' => 'Upload successful',
+            'filename' => $file->getClientOriginalName(),
             'tiktok' => $tiktokCount,
             'shopee' => $shopeeCount,
             'total' => $tiktokCount + $shopeeCount
@@ -382,6 +391,16 @@ class ApiController extends Controller
                 ->where('receipt_number', $history->receipt_number)
                 ->update(['is_winner' => false]);
                 
+            // If linked to an EventDetail, revert the slot to pending
+            $eventDetail = \App\Models\EventDetail::where('spin_history_id', $history->id)->first();
+            if ($eventDetail) {
+                $eventDetail->update([
+                    'status' => 'pending',
+                    'participant_id' => null,
+                    'spin_history_id' => null
+                ]);
+            }
+
             $history->delete();
             
             DB::commit();
@@ -944,6 +963,7 @@ class ApiController extends Controller
                 'wheel_items' => $decoys,
                 'winner_index' => $winnerIndex,
                 'remaining' => $remaining,
+                'history_id' => $history->id,
                 'is_rigged' => $isRigged,
             ]);
         } catch (\Exception $e) {

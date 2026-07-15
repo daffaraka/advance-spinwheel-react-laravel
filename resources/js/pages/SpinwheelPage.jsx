@@ -52,6 +52,10 @@ export default function SpinwheelPage({ auth }) {
 
   // Event states (Master-Detail)
   const [activeTab, setActiveTab] = useState('history'); // 'history' | 'event'
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadClearOld, setUploadClearOld] = useState('yes');
+  const [uploadedFileName, setUploadedFileName] = useState('');
   const [events, setEvents] = useState([]);
   const [expandedEventId, setExpandedEventId] = useState(null);
   const [isLoadingEventDetails, setIsLoadingEventDetails] = useState(false);
@@ -146,6 +150,32 @@ export default function SpinwheelPage({ auth }) {
       const res = await axios.get('/events', { params: { platform: eventPlatform } });
       setEvents(res.data);
     } catch (err) { console.error(err); }
+  };
+
+  const handleUploadData = async (e) => {
+    e.preventDefault();
+    if (!uploadFile) { alert('Pilih file Excel/CSV terlebih dahulu!'); return; }
+
+    const formData = new FormData();
+    formData.append('file', uploadFile);
+    formData.append('clear_old', uploadClearOld);
+
+    setIsUploading(true);
+    try {
+      const res = await axios.post('/upload-combined', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      alert('Upload berhasil! (Perhatian: Tidak ada error foreign key karena data di-set null)');
+      if (res.data.filename) setUploadedFileName(res.data.filename);
+      setShowUploadModal(false);
+      setUploadFile(null);
+      fetchStats();
+      if (activeTab === 'history') fetchHistories();
+    } catch (err) {
+      alert('Upload gagal: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleCreateEvent = async () => {
@@ -582,7 +612,10 @@ export default function SpinwheelPage({ auth }) {
                       <ListOrdered className="w-4 h-4 mr-2" /> Manaje Hadiah
                     </button>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
+                    <button onClick={() => setShowUploadModal(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center transition-colors shadow-lg">
+                      <Upload className="w-4 h-4 mr-2" /> Upload Excel
+                    </button>
                     <button onClick={() => setShowSequenceModal(true)} className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center transition-colors shadow-lg">
                       Untuk Content
                     </button>
@@ -597,18 +630,20 @@ export default function SpinwheelPage({ auth }) {
                 {activeTab === 'history' ? (
                   <>
                     {/* Controls */}
-                    <div className="flex flex-col md:flex-row gap-4 mb-6">
-                      <div className="flex-1 relative">
-                        <Search className="absolute left-3 top-3 text-indigo-400 w-5 h-5" />
-                        <input
-                          type="text"
-                          placeholder="Cari Judul Acara atau No. Resi..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="w-full bg-gray-50 border border-gray-300 rounded-xl pl-10 pr-4 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-gray-800"
-                        />
-                      </div>
-                      <div className="w-full md:w-48 relative">
+                    <div className="flex flex-col gap-4 mb-6">
+                      <div className="flex flex-col md:flex-row gap-4">
+                        <div className="flex-1 relative">
+                          <Search className="absolute left-3 top-3 text-indigo-400 w-5 h-5" />
+                          <input
+                            type="text"
+                            placeholder="Cari Judul Acara atau No. Resi..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full bg-gray-50 border border-gray-300 rounded-xl pl-10 pr-4 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-gray-800"
+                          />
+                        </div>
+
+                        <div className="w-full md:w-48 relative">
                         <Filter className="absolute left-3 top-3 text-indigo-400 w-5 h-5" />
                         <select
                           value={filterMonth}
@@ -644,6 +679,13 @@ export default function SpinwheelPage({ auth }) {
                         </select>
                       </div>
                     </div>
+
+                    {uploadedFileName && (
+                      <div className="w-full flex items-center justify-center px-5 py-2.5 bg-green-50 border-2 border-green-500 rounded-xl text-sm font-semibold text-green-700 shadow-sm truncate" title={uploadedFileName}>
+                        File Upload: {uploadedFileName}
+                      </div>
+                    )}
+                  </div>
 
                     {/* Table */}
                     <div className="overflow-auto flex-1 custom-scrollbar rounded-xl border border-gray-300">
@@ -1259,6 +1301,71 @@ export default function SpinwheelPage({ auth }) {
                   </div>
                 </div>
               )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Upload Excel Modal */}
+      <AnimatePresence>
+        {showUploadModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          >
+            <div className="bg-white p-6 rounded-2xl w-full max-w-md border border-gray-300 shadow-2xl">
+              <h3 className="text-xl font-bold mb-4 text-gray-900 flex items-center">
+                <Upload className="w-5 h-5 mr-2" /> Upload Data Excel
+              </h3>
+              
+              <form onSubmit={handleUploadData} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Pilih File (.xlsx, .csv)</label>
+                  <input
+                    type="file"
+                    accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                    onChange={e => setUploadFile(e.target.files[0])}
+                    className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-gray-800 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                  />
+                </div>
+                
+                <div className="pt-2">
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Hapus data lama?</label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        value="yes" 
+                        checked={uploadClearOld === 'yes'} 
+                        onChange={e => setUploadClearOld(e.target.value)}
+                        className="text-blue-600 focus:ring-blue-500 w-4 h-4"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Yes (Timpa/Reset Data)</span>
+                    </label>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        value="no" 
+                        checked={uploadClearOld === 'no'} 
+                        onChange={e => setUploadClearOld(e.target.value)}
+                        className="text-blue-600 focus:ring-blue-500 w-4 h-4"
+                      />
+                      <span className="text-sm font-medium text-gray-700">No (Tambah Data Saja)</span>
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-2 italic">*Foreign key (Histori & Event Detail) aman karena constraint di database menggunakan onDelete('set null').</p>
+                </div>
+
+                <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
+                  <button type="button" onClick={() => { setShowUploadModal(false); setUploadFile(null); }} className="px-5 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-xl transition-colors font-bold text-sm">Batal</button>
+                  <button type="submit" disabled={isUploading} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-colors font-bold flex items-center text-sm disabled:opacity-50">
+                    {isUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />} 
+                    {isUploading ? 'Mengupload...' : 'Upload Data'}
+                  </button>
+                </div>
+              </form>
             </div>
           </motion.div>
         )}
